@@ -1,0 +1,19 @@
+{
+  "agent": "orchestrator",
+  "permissions": {
+    "deny": [
+      "Read(~/.ssh/**)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(~/.credentials/**)",
+      "Read(~/.config/gh/hosts.yml)",
+      "Read(**/secrets/**)",
+      "Read(**/*.p12)",
+      "Read(**/*.pfx)",
+      "Bash(cat ~/.ssh/*)",
+      "Bash(cat **/.env*)"
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git branch *)",
+      "Bash(git fetch *)",
+      "Bash(git worktree *)",
+      "Bash(python -V)",
+      "Bash(pip install *)",
+      "Bash(python -m pytest *)",
+      "Bash(python -m pytest --version)",
+      "Bash(python -m ruff check *)",
+      "Bash(python -m ruff --version)",
+      "Bash(ruff check *)",
+      "Bash(ruff format *)",
+      "Bash(python -c \"import chromadb;print('chromadb',chromadb.__version__)\")",
+      "Bash(python -c \"import sentence_transformers;print('sentence-transformers',sentence_transformers.__version__)\")",
+      "Bash(python -c \"import anthropic;print('anthropic',anthropic.__version__)\")",
+      "Bash(python -c \"import fastapi;print('fastapi',fastapi.__version__)\")",
+      "Bash(uvicorn src.api.main:app --reload)",
+      "Bash(npm run dev)",
+      "Bash(npm run build)",
+      "Bash(echo \"exit_code: $?\")",
+      "Read(//tmp/**)",
+      "mcp__codebase-memory-mcp__index_repository",
+      "mcp__codebase-memory-mcp__list_projects",
+      "mcp__codebase-memory-mcp__index_status"
+    ]
+  }
+}
