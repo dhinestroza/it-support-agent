@@ -22,9 +22,19 @@ Low technical level expected — needs to be readable at a glance.
   demo dataset
 
 ### Inputs and outputs
-- Input: reads from `GET /tickets` and `GET /tickets/{id}` (001's API,
-  extended with two read endpoints if not already present)
+- Input: reads from `GET /tickets` (list) and `GET /tickets/{id}`
+  (detail). These two read-only endpoints do not exist in 001 and are
+  added to the FastAPI app as task T0 of this feature.
 - Output: two rendered pages — dashboard, ticket detail
+
+### UI language
+User-facing display text is rendered in **Spanish** for the N1 support
+audience (status badge labels — Pendiente / Resuelto / Escalado —, the
+proposed-action label, aria-labels, empty/error states). The underlying
+data stays English: the `status` and `action` values from the API, all
+TypeScript types, component/class names, code, and comments. Translation
+lives in a single map (`frontend/src/lib/labels.ts`); components never
+hardcode a Spanish string inline.
 
 ### Acceptance criteria
 - [ ] Dashboard lists every ticket in the demo dataset with its status
@@ -38,7 +48,9 @@ Low technical level expected — needs to be readable at a glance.
 
 ### Edge cases and failure modes
 - No tickets yet → empty state, not a blank page
-- API unreachable → visible error state, not a silent blank screen
+- API unreachable → visible error state, not a silent blank screen (the
+  error state is produced at build time — building with the backend down
+  renders the error page, never a blank one)
 
 ### Autonomy limits
 N/A — this is a read-only UI, no autonomous action.
@@ -49,3 +61,7 @@ Low — read-only view of already-generated, non-sensitive demo data.
 ### How it's evaluated
 Manual check against the acceptance criteria above (visual/UI feature —
 no automated test suite required for the 90-minute scope).
+The backend endpoints added in T0 are covered by pytest
+(`tests/test_api.py`). The Astro pages are verified by `npm run build` +
+`npx astro check` per task plus the manual acceptance-criteria check
+above.

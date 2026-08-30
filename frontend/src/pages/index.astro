@@ -1,0 +1,54 @@
+---
+import Layout from "../layouts/Layout.astro";
+import TicketCard from "../components/TicketCard.astro";
+import { fetchTickets } from "../lib/api";
+import { MESSAGES, PAGE } from "../lib/labels";
+
+const result = await fetchTickets();
+---
+
+<Layout title={PAGE.dashboardTitle}>
+  <h1 lang="es">{PAGE.dashboardHeading}</h1>
+  {
+    !result.ok ? (
+      <p class="state" lang="es">
+        {MESSAGES.apiError}
+      </p>
+    ) : result.data.length === 0 ? (
+      <p class="state" lang="es">
+        {MESSAGES.noTickets}
+      </p>
+    ) : (
+      <ul class="ticket-list">
+        {result.data.map((ticket) => (
+          <li>
+            <TicketCard ticket={ticket} />
+          </li>
+        ))}
+      </ul>
+    )
+  }
+</Layout>
+
+<style>
+  h1 {
+    margin: 0 0 1.25rem;
+    font-size: 1.5rem;
+    color: var(--color-text);
+  }
+
+  .ticket-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .state {
+    margin: 0;
+    padding: 1.5rem 0;
+    color: var(--color-text-muted);
+  }
+</style>

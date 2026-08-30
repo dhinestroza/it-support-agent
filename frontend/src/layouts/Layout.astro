@@ -1,0 +1,57 @@
+---
+import { APP_NAME } from "../lib/labels";
+import "../styles/tokens.css";
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+  </head>
+  <body>
+    <header class="app-header">
+      <span class="app-name">{APP_NAME}</span>
+    </header>
+    <main class="app-main">
+      <slot />
+    </main>
+  </body>
+</html>
+
+<style>
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: system-ui, sans-serif;
+  }
+
+  .app-header {
+    background: var(--color-brand);
+    color: var(--color-surface);
+    padding: 1rem 1.5rem;
+  }
+
+  .app-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+
+  .app-main {
+    max-width: 44rem;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 3rem;
+  }
+</style>

@@ -384,8 +384,24 @@ def test_save_decision_rejects_sources_that_are_not_json_serializable(
 
 @pytest.mark.parametrize(
     "raw_sources",
-    ["not json", '{"a": 1}', "[1, 2]"],
-    ids=["invalid-json", "json-object-not-list", "list-of-non-objects"],
+    [
+        "not json",
+        '{"a": 1}',
+        "[1, 2]",
+        '[{"doc_id": "x"}]',
+        '[{"excerpt": "x"}]',
+        '[{"doc_id": 1, "excerpt": "x"}]',
+        '[{"doc_id": "x", "excerpt": null}]',
+    ],
+    ids=[
+        "invalid-json",
+        "json-object-not-list",
+        "list-of-non-objects",
+        "source-missing-excerpt",
+        "source-missing-doc-id",
+        "source-with-non-str-doc-id",
+        "source-with-non-str-excerpt",
+    ],
 )
 def test_get_decision_for_ticket_rejects_a_corrupt_sources_blob(
     connection: sqlite3.Connection, repository: Repository, raw_sources: str

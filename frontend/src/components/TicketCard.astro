@@ -1,0 +1,96 @@
+---
+import StatusBadge from "./StatusBadge.astro";
+import type { TicketSummary } from "../lib/types";
+import { STATUS_LABELS, ACTION_LABELS, FIELD_LABELS } from "../lib/labels";
+import { formatTicketDate } from "../lib/date";
+
+interface Props {
+  ticket: TicketSummary;
+}
+
+const { ticket } = Astro.props;
+
+const created = formatTicketDate(ticket.created_at);
+
+const cardLabel = `${ticket.subject}. ${FIELD_LABELS.status}: ${
+  STATUS_LABELS[ticket.status]
+}${
+  ticket.action
+    ? `. ${FIELD_LABELS.proposedAction}: ${ACTION_LABELS[ticket.action]}`
+    : ""
+}. ${created.label}`;
+---
+
+<a class="card" href={`/tickets/${ticket.ticket_id}`} aria-label={cardLabel}>
+  <span class="subject">{ticket.subject}</span>
+  <span class="meta" aria-hidden="true">
+    {
+      created.iso ? (
+        <time class="date" datetime={created.iso}>
+          {created.label}
+        </time>
+      ) : (
+        <span class="date">{created.label}</span>
+      )
+    }
+    <span class="status">
+      <StatusBadge status={ticket.status} />
+    </span>
+  </span>
+  {
+    ticket.action && (
+      <span class="action" aria-hidden="true">
+        {FIELD_LABELS.proposedAction}: {ACTION_LABELS[ticket.action]}
+      </span>
+    )
+  }
+</a>
+
+<style>
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 1rem 1.15rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    color: var(--color-text);
+    text-decoration: none;
+    transition:
+      border-color 120ms ease,
+      box-shadow 120ms ease;
+  }
+
+  .card:hover {
+    border-color: var(--color-brand);
+  }
+
+  .card:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-color: var(--color-brand);
+  }
+
+  .subject {
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .meta .date {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+
+  .action {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+</style>

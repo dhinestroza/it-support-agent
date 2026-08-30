@@ -12,8 +12,14 @@ from src.api.dependencies import (
     get_repository,
     get_retriever,
 )
-from src.api.schemas import SourceOut, TicketRequest, TicketResponse
-from src.db.models import status_for_action
+from src.api.schemas import (
+    SourceOut,
+    TicketDetail,
+    TicketRequest,
+    TicketResponse,
+    TicketSummary,
+)
+from src.db.models import DecisionRecord, Ticket, status_for_action
 from src.db.repository import Repository
 from src.errors import SupportAgentError
 
@@ -31,6 +37,37 @@ def _to_sources_out(decision: Decision) -> list[SourceOut]:
         SourceOut(doc_id=source.doc_id, excerpt=source.excerpt)
         for source in decision.sources
     ]
+
+
+def _stored_sources_out(decision: DecisionRecord) -> list[SourceOut]:
+    return [
+        SourceOut(doc_id=str(source["doc_id"]), excerpt=str(source["excerpt"]))
+        for source in decision.sources_used
+    ]
+
+
+def _to_summary(ticket: Ticket, decision: DecisionRecord | None) -> TicketSummary:
+    return TicketSummary(
+        ticket_id=ticket.id,
+        subject=ticket.subject,
+        status=ticket.status,
+        created_at=ticket.created_at,
+        action=None if decision is None else decision.action,
+    )
+
+
+def _to_detail(ticket: Ticket, decision: DecisionRecord | None) -> TicketDetail:
+    return TicketDetail(
+        ticket_id=ticket.id,
+        subject=ticket.subject,
+        body=ticket.body,
+        status=ticket.status,
+        created_at=ticket.created_at,
+        action=None if decision is None else decision.action,
+        reasoning=None if decision is None else decision.reasoning,
+        draft=None if decision is None else decision.drafted_response,
+        sources=[] if decision is None else _stored_sources_out(decision),
+    )
 
 
 def _retrieve_or_empty(
@@ -78,3 +115,19 @@ def create_ticket(
         sources=cited,
         reasoning=decision.reasoning,
     )
+
+
+@router.get("/tickets")
+def list_tickets(repository: RepositoryDep) -> list[TicketSummary]:
+    # One decision lookup per ticket: acceptable for the demo-sized dataset.
+    return [
+        _to_summary(ticket, repository.get_decision_for_ticket(ticket.id))
+        for ticket in repository.list_tickets()
+    ]
+
+
+@router.get("/tickets/{ticket_id}")
+def get_ticket(ticket_id: str, repository: RepositoryDep) -> TicketDetail:
+    # An unknown id raises NotFoundError, mapped to a 404 by the app handler.
+    ticket = repository.get_ticket(ticket_id)
+    return _to_detail(ticket, repository.get_decision_for_ticket(ticket.id))

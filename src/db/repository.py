@@ -69,7 +69,13 @@ def _load_sources(raw: str) -> list[dict[str, Any]]:
         raise ValidationError("Stored sources_used is not a JSON list")
     if not all(isinstance(element, Mapping) for element in payload):
         raise ValidationError("Stored sources_used has a non-object element")
+    if not all(_is_valid_source(element) for element in payload):
+        raise ValidationError("Stored sources_used has a malformed source object")
     return cast(list[dict[str, Any]], payload)
+
+
+def _is_valid_source(source: Mapping[str, Any]) -> bool:
+    return all(isinstance(source.get(key), str) for key in ("doc_id", "excerpt"))
 
 
 def _to_ticket(row: sqlite3.Row) -> Ticket:

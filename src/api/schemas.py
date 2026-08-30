@@ -8,6 +8,7 @@ MAX_SUBJECT_CHARS = 300
 MAX_BODY_CHARS = 20_000
 
 Action = Literal["answer", "ask", "escalate"]
+TicketStatus = Literal["pending", "resolved", "escalated"]
 
 Subject = Annotated[
     str,
@@ -35,3 +36,23 @@ class TicketResponse(BaseModel):
     draft: str
     sources: list[SourceOut] = Field(default_factory=list)
     reasoning: str
+
+
+class TicketSummary(BaseModel):
+    ticket_id: str
+    subject: str
+    status: TicketStatus
+    created_at: str
+    action: Action | None = None
+
+
+class TicketDetail(BaseModel):
+    ticket_id: str
+    subject: str
+    body: str
+    status: TicketStatus
+    created_at: str
+    action: Action | None = None
+    reasoning: str | None = None
+    draft: str | None = None
+    sources: list[SourceOut] = Field(default_factory=list)

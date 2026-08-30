@@ -1,0 +1,14 @@
+:root {
+  --color-brand: #a26769;
+  --color-bg: #f5f3f4;
+  --color-surface: #ffffff;
+  --color-border: #e2dcdd;
+  --color-text: #2b2224;
+  --color-text-muted: #7a6d6e;
+  --status-resolved-bg: #e4ece0;
+  --status-resolved-text: #3f5b32;
+  --status-pending-bg: #f5e6d3;
+  --status-pending-text: #8a5a1f;
+  --status-escalated-bg: #f0dcdc;
+  --status-escalated-text: #7a3f42;
+}

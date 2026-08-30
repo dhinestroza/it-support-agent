@@ -36,6 +36,8 @@ from src.errors import (
 )
 
 RESPONSE_KEYS = {"ticket_id", "action", "draft", "sources", "reasoning"}
+SUMMARY_KEYS = {"ticket_id", "subject", "status", "created_at", "action"}
+DETAIL_KEYS = SUMMARY_KEYS | {"body", "reasoning", "draft", "sources"}
 
 PASSWORD_SOURCE = Source(
     doc_id="password-reset",
@@ -531,6 +533,141 @@ def test_health_endpoint(db_path: str) -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_list_tickets_is_empty_when_no_ticket_exists(db_path: str) -> None:
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        response = client.get("/tickets")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_tickets_returns_newest_first_with_the_decided_action(
+    db_path: str,
+) -> None:
+    retriever = FakeRetriever([PASSWORD_SOURCE])
+    llm = ScriptedLlm(llm_json("answer", sources=["password-reset"]))
+    with build_client(retriever, llm) as client:
+        first = client.post(
+            "/tickets",
+            json={"subject": "Password reset", "body": "How do I reset my password?"},
+        ).json()
+        second = client.post(
+            "/tickets",
+            json={"subject": "VPN down", "body": "The VPN client fails to connect."},
+        ).json()
+        response = client.get("/tickets")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [item["ticket_id"] for item in payload] == [
+        second["ticket_id"],
+        first["ticket_id"],
+    ]
+    assert set(payload[0]) == SUMMARY_KEYS
+    assert payload[0]["subject"] == "VPN down"
+    assert payload[0]["status"] == "pending"
+    assert payload[0]["created_at"]
+    assert [item["action"] for item in payload] == ["answer", "answer"]
+
+
+def test_list_tickets_exposes_a_null_action_without_a_decision(
+    db_path: str, repository: Repository
+) -> None:
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        ticket = repository.create_ticket("Undecided", "Nothing has run yet.")
+        response = client.get("/tickets")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert set(payload[0]) == SUMMARY_KEYS
+    assert payload[0]["ticket_id"] == ticket.id
+    assert payload[0]["subject"] == "Undecided"
+    assert payload[0]["status"] == "pending"
+    assert payload[0]["action"] is None
+
+
+def test_list_tickets_exposes_an_escalated_ticket_and_its_action(
+    db_path: str, repository: Repository
+) -> None:
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        ticket = repository.create_ticket("Laptop on fire", "Smoke is coming out.")
+        repository.save_decision(
+            ticket_id=ticket.id,
+            action="escalate",
+            reasoning="No KB coverage for hardware incidents.",
+            drafted_response="Escalating to the hardware team.",
+            sources_used=[],
+        )
+        repository.update_ticket_status(ticket.id, "escalated")
+        response = client.get("/tickets")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["ticket_id"] == ticket.id
+    assert payload[0]["status"] == "escalated"
+    assert payload[0]["action"] == "escalate"
+
+
+def test_get_ticket_returns_the_body_and_its_latest_decision(db_path: str) -> None:
+    retriever = FakeRetriever([PASSWORD_SOURCE])
+    llm = ScriptedLlm(
+        llm_json(
+            "answer",
+            draft="Use the portal.",
+            reasoning="The KB covers this.",
+            sources=["password-reset"],
+        )
+    )
+    with build_client(retriever, llm) as client:
+        created = client.post(
+            "/tickets",
+            json={"subject": "Password reset", "body": "How do I reset my password?"},
+        ).json()
+        response = client.get(f"/tickets/{created['ticket_id']}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload) == DETAIL_KEYS
+    assert payload["ticket_id"] == created["ticket_id"]
+    assert payload["subject"] == "Password reset"
+    assert payload["body"] == "How do I reset my password?"
+    assert payload["status"] == "pending"
+    assert payload["created_at"]
+    assert payload["action"] == "answer"
+    assert payload["reasoning"] == "The KB covers this."
+    assert payload["draft"] == "Use the portal."
+    assert payload["sources"] == [
+        {"doc_id": "password-reset", "excerpt": "Open the self-service portal."}
+    ]
+
+
+def test_get_ticket_without_a_decision_returns_nulls_and_no_sources(
+    db_path: str, repository: Repository
+) -> None:
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        ticket = repository.create_ticket("Undecided", "Nothing has run yet.")
+        response = client.get(f"/tickets/{ticket.id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ticket_id"] == ticket.id
+    assert payload["body"] == "Nothing has run yet."
+    assert payload["action"] is None
+    assert payload["reasoning"] is None
+    assert payload["draft"] is None
+    assert payload["sources"] == []
+
+
+def test_get_ticket_with_an_unknown_id_returns_404(db_path: str) -> None:
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        response = client.get("/tickets/does-not-exist")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Resource not found"}
 
 
 def test_get_repository_yields_a_fresh_connection_and_closes_it(

@@ -1,0 +1,169 @@
+---
+import Layout from "../../layouts/Layout.astro";
+import StatusBadge from "../../components/StatusBadge.astro";
+import SourceCitation from "../../components/SourceCitation.astro";
+import DecisionPanel from "../../components/DecisionPanel.astro";
+import { fetchTicketDetail, fetchTicketIds } from "../../lib/api";
+import { formatTicketDate } from "../../lib/date";
+import { FIELD_LABELS, MESSAGES, PAGE } from "../../lib/labels";
+
+export async function getStaticPaths() {
+  const ids = await fetchTicketIds();
+  return ids.map((id) => ({ params: { id } }));
+}
+
+const { id } = Astro.params;
+const result = await fetchTicketDetail(id!);
+
+const failureMessage = result.ok
+  ? ""
+  : result.reason === "not-found"
+    ? MESSAGES.ticketNotFound
+    : MESSAGES.apiError;
+
+const created = result.ok ? formatTicketDate(result.data.created_at) : null;
+---
+
+<Layout title={PAGE.detailTitle}>
+  <a class="back" href="/" lang="es">{PAGE.backToList}</a>
+  {
+    !result.ok ? (
+      <h1 class="failure" lang="es">
+        {failureMessage}
+      </h1>
+    ) : (
+      <article class="detail">
+        <h1>{result.data.subject}</h1>
+        <p class="meta">
+          <StatusBadge status={result.data.status} />
+          {created &&
+            (created.iso ? (
+              <time class="date" datetime={created.iso}>
+                {created.label}
+              </time>
+            ) : (
+              <span class="date">{created.label}</span>
+            ))}
+        </p>
+
+        <section class="section">
+          <h2 lang="es">{FIELD_LABELS.body}</h2>
+          <div class="body">{result.data.body}</div>
+        </section>
+
+        <section class="section">
+          <h2 lang="es">{FIELD_LABELS.sources}</h2>
+          {result.data.sources.length === 0 ? (
+            <p class="state" lang="es">
+              {MESSAGES.noSources}
+            </p>
+          ) : (
+            <ul class="source-list">
+              {result.data.sources.map((source) => (
+                <li>
+                  <SourceCitation source={source} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* The heading belongs to the page, not to DecisionPanel, so the block
+            stays labelled even when the ticket has no decision yet — same shape
+            as the sources section above. */}
+        <section class="section">
+          <h2 lang="es">{FIELD_LABELS.decision}</h2>
+          <DecisionPanel
+            action={result.data.action}
+            reasoning={result.data.reasoning}
+            draft={result.data.draft}
+          />
+        </section>
+      </article>
+    )
+  }
+</Layout>
+
+<style>
+  .back {
+    display: inline-block;
+    margin-bottom: 1.25rem;
+    color: var(--color-brand);
+    font-size: 0.85rem;
+    text-decoration: none;
+  }
+
+  .back:hover {
+    text-decoration: underline;
+  }
+
+  .back:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+
+  h1 {
+    margin: 0 0 0.75rem;
+    font-size: 1.5rem;
+    line-height: 1.3;
+    color: var(--color-text);
+  }
+
+  .failure {
+    padding: 1rem 0;
+    font-size: 1.15rem;
+    color: var(--color-text-muted);
+  }
+
+  .meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0;
+  }
+
+  .meta .date {
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+
+  .section {
+    margin-top: 1.75rem;
+  }
+
+  .section h2 {
+    margin: 0 0 0.6rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+  }
+
+  .body {
+    padding: 0.9rem 1.1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    color: var(--color-text);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .source-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .state {
+    margin: 0;
+    padding: 1rem 0;
+    color: var(--color-text-muted);
+  }
+</style>

@@ -12,6 +12,7 @@ _How the project is built and the rules all code must follow. The technical refe
 | Storage | SQLite (`tickets`, `decisions`) |
 | Frontend | Astro (static output), 2 pages, reusable components |
 | Tests | pytest |
+| Config | `python-dotenv` (runtime dependency) loads the local `.env` at startup — no secrets committed, `.env` is gitignored |
 | Infra | None — local/free only, no cloud, no Terraform, no CI/CD (out of scope for the 90-minute build) |
 
 ## Brand / design tokens

@@ -3,7 +3,9 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -14,6 +16,21 @@ from src.api.dependencies import open_connection
 from src.api.routes import router
 from src.db.repository import create_schema
 from src.errors import NotFoundError, SupportAgentError, ValidationError
+
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
+
+def _load_local_env(env_file: Path | None = None) -> None:
+    """Load the repo-root `.env` so `uvicorn src.api.main:app` picks up
+    ANTHROPIC_API_KEY without a manual export (dev/demo convenience, mirrors
+    tests/conftest.py; `.env` is gitignored, so no secrets are committed).
+    Never overrides already-exported variables, and is a no-op if the file
+    is missing.
+    """
+    load_dotenv(env_file or _ENV_FILE)
+
+
+_load_local_env()
 
 logger = logging.getLogger(__name__)
 
