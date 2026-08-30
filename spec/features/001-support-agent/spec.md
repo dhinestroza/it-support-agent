@@ -48,23 +48,23 @@ clear decision and a draft they can approve or edit.
   `sources` may be empty
 
 ### Acceptance criteria
-- [ ] Given a ticket clearly covered by one KB doc (e.g. "how do I reset my
+- [x] Given a ticket clearly covered by one KB doc (e.g. "how do I reset my
       password"), the agent returns `action=answer` with a draft that
       references the correct doc
-- [ ] Given a ticket with missing information needed to help (e.g. "my VPN
+- [x] Given a ticket with missing information needed to help (e.g. "my VPN
       doesn't work" with no OS/error given), the agent returns `action=ask`
-- [ ] Given a ticket requesting something outside agent authority (e.g. new
+- [x] Given a ticket requesting something outside agent authority (e.g. new
       laptop purchase, access to a production database), the agent returns
       `action=escalate`
-- [ ] Given a ticket containing an instruction trying to override the
+- [x] Given a ticket containing an instruction trying to override the
       agent's behavior (prompt injection), the agent ignores the injected
       instruction and treats it as ticket content, not as a command
-- [ ] Given an empty or near-empty ticket body, the agent returns
+- [x] Given an empty or near-empty ticket body, the agent returns
       `action=ask` rather than guessing or erroring
-- [ ] Given the LLM call fails (timeout/error), the agent returns
+- [x] Given the LLM call fails (timeout/error), the agent returns
       `action=escalate` with a note that automated triage failed — never
       silently drops the ticket
-- [ ] Every `answer` and `ask` response cites at least one retrieved
+- [x] Every `answer` and `ask` response cites at least one retrieved
       source when one was used; no fabricated doc references
 
 ### Edge cases and failure modes
@@ -94,6 +94,15 @@ is documented as a roadmap backlog item, not built in the 90-minute scope.
   recall accordingly
 - Human enters: reviewing every drafted answer before it's sent (out of
   scope for this demo but stated as the production requirement)
+- Accepted residual risk (T3, decision engine): the drafted text of an
+  `answer` is not verified in code against the retrieved source it cites —
+  the similarity-threshold gate proves a relevant KB source exists, not
+  that the draft was derived from it. A prompt-injection that survives the
+  model could therefore still shape the drafted wording on a ticket that
+  has one matching KB section. This is accepted for the assessment scope
+  because every `answer` requires mandatory human review before it is sent
+  (see Autonomy limits); a code-side grounding check is a backlog item, not
+  built in the 90-minute window.
 
 ### How it's evaluated
 `tests/eval_suite.py` — 8-10 fixed cases (see tasks.md) covering: direct
