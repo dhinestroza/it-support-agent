@@ -1,0 +1,48 @@
+---
+import type { TicketStatus } from "../lib/types";
+import { STATUS_LABELS, UNKNOWN_STATUS_LABEL } from "../lib/labels";
+
+interface Props {
+  status: TicketStatus;
+}
+
+const { status } = Astro.props;
+
+const KNOWN = Object.keys(STATUS_LABELS);
+const variant = KNOWN.includes(status) ? status : "unknown";
+---
+
+<span lang="es" class:list={["badge", `badge--${variant}`]}>{
+  variant === "unknown" ? UNKNOWN_STATUS_LABEL : STATUS_LABELS[status]
+}</span>
+
+<style>
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  .badge--pending {
+    background-color: var(--status-pending-bg);
+    color: var(--status-pending-text);
+  }
+
+  .badge--resolved {
+    background-color: var(--status-resolved-bg);
+    color: var(--status-resolved-text);
+  }
+
+  .badge--escalated {
+    background-color: var(--status-escalated-bg);
+    color: var(--status-escalated-text);
+  }
+
+  .badge--unknown {
+    background-color: color-mix(in srgb, var(--color-brand) 12%, transparent);
+    color: var(--color-text);
+  }
+</style>

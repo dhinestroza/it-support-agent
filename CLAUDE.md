@@ -3,7 +3,7 @@
 Local RAG support agent for internal IT tickets (Data & Agentic AI Assessment, track P3). Receives a ticket, retrieves context from a knowledge base, decides answer/ask/escalate, and drafts the action. Mandatory human confirmation before anything is sent — see `spec/constitution/tech-stack.md` for the full autonomy limit. Authoritative source for domain and RAG rules: the `support-agent-domain` and `rag-chroma-python` skills — this file doesn't duplicate them.
 
 ## Stack
-- Language: Python 3.12, type hints required
+- Language: Python 3.11+, type hints required
 - Backend: FastAPI + Uvicorn
 - Data: ChromaDB (local, persisted to `./chroma_data/`) — **no cloud vector DB, no SQL server**
 - AI: Claude Sonnet 5 via direct Anthropic API call — **no agent framework, no autonomous tool-calling on the critical path**

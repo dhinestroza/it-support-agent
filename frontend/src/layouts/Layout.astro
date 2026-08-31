@@ -1,0 +1,125 @@
+---
+import { APP_NAME, PAGE } from "../lib/labels";
+import "../styles/tokens.css";
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+  </head>
+  <body>
+    <div class="sidebar">
+      <span class="brand">{APP_NAME}</span>
+      <nav aria-label={PAGE.navLabel}>
+        <a class="nav-item is-active" href="/">{PAGE.navHome}</a>
+      </nav>
+    </div>
+    <div class="content">
+      <main class="page">
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>
+
+<style>
+  body {
+    margin: 0;
+    display: flex;
+    min-height: 100vh;
+    color: var(--color-text);
+    font-family: system-ui, sans-serif;
+  }
+
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+    flex-shrink: 0;
+    width: 15rem;
+    min-height: 100vh;
+    padding: 1.5rem 1rem;
+    box-sizing: border-box;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+  }
+
+  .brand {
+    padding: 0 0.65rem;
+    color: var(--color-brand);
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+
+  nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .nav-item {
+    padding: 0.55rem 0.65rem;
+    border-radius: 8px;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .nav-item:hover {
+    background: color-mix(in srgb, var(--color-brand) 5%, transparent);
+  }
+
+  .nav-item.is-active {
+    background: color-mix(in srgb, var(--color-brand) 10%, transparent);
+    color: var(--color-brand);
+  }
+
+  .nav-item:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+
+  .content {
+    flex: 1;
+    min-width: 0;
+    background: var(--color-bg);
+    overflow-y: auto;
+  }
+
+  .page {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  @media (max-width: 640px) {
+    body {
+      flex-direction: column;
+    }
+
+    .sidebar {
+      width: 100%;
+      min-height: 0;
+      border-right: 0;
+      border-bottom: 1px solid var(--color-border);
+    }
+
+    .page {
+      padding: 1.5rem 1rem 2.5rem;
+    }
+  }
+</style>
