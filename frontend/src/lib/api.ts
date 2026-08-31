@@ -21,6 +21,7 @@ function isTicketSummary(value: unknown): value is TicketSummary {
   return (
     typeof candidate.ticket_id === "string" &&
     typeof candidate.subject === "string" &&
+    typeof candidate.body_excerpt === "string" &&
     typeof candidate.created_at === "string" &&
     typeof candidate.status === "string" &&
     candidate.status in STATUS_LABELS &&
@@ -46,11 +47,6 @@ export async function fetchTickets(): Promise<LoadResult<TicketSummary[]>> {
     console.warn(`[api] GET /tickets failed: ${String(error)}`);
     return { ok: false, reason: "error" };
   }
-}
-
-export async function fetchTicketIds(): Promise<string[]> {
-  const result = await fetchTickets();
-  return result.ok ? result.data.map((ticket) => ticket.ticket_id) : [];
 }
 
 function isSource(value: unknown): value is Source {

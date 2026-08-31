@@ -8,6 +8,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 
 from src.agent.decision import (
@@ -26,7 +27,13 @@ from src.api.dependencies import (
     get_repository,
     get_retriever,
 )
-from src.api.main import MAX_REQUEST_BYTES, _replay, app
+from src.api.main import (
+    DEFAULT_FRONTEND_ORIGINS,
+    MAX_REQUEST_BYTES,
+    _frontend_origins,
+    _replay,
+    app,
+)
 from src.db.repository import Repository, connect
 from src.errors import (
     EmptyKnowledgeBaseError,
@@ -36,8 +43,22 @@ from src.errors import (
 )
 
 RESPONSE_KEYS = {"ticket_id", "action", "draft", "sources", "reasoning"}
-SUMMARY_KEYS = {"ticket_id", "subject", "status", "created_at", "action"}
-DETAIL_KEYS = SUMMARY_KEYS | {"body", "reasoning", "draft", "sources"}
+SUMMARY_KEYS = {
+    "ticket_id",
+    "subject",
+    "body_excerpt",
+    "status",
+    "created_at",
+    "action",
+}
+# The detail payload carries the full body, never the list-only excerpt.
+DETAIL_KEYS = (SUMMARY_KEYS - {"body_excerpt"}) | {
+    "body",
+    "reasoning",
+    "draft",
+    "sources",
+}
+EXCERPT_LIMIT = 140
 
 PASSWORD_SOURCE = Source(
     doc_id="password-reset",
@@ -612,6 +633,166 @@ def test_list_tickets_exposes_an_escalated_ticket_and_its_action(
     assert payload[0]["action"] == "escalate"
 
 
+def test_list_tickets_includes_a_body_excerpt_for_every_item(db_path: str) -> None:
+    retriever = FakeRetriever([PASSWORD_SOURCE])
+    llm = ScriptedLlm(llm_json("answer", sources=["password-reset"]))
+    with build_client(retriever, llm) as client:
+        client.post(
+            "/tickets",
+            json={"subject": "Password reset", "body": "How do I reset my password?"},
+        )
+        response = client.get("/tickets")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload[0]) == SUMMARY_KEYS
+    assert payload[0]["body_excerpt"] == "How do I reset my password?"
+
+
+def test_list_tickets_truncates_a_long_body_excerpt_on_a_word_boundary(
+    db_path: str,
+) -> None:
+    body = "The VPN client keeps dropping the connection from home every hour. " * 4
+    retriever = FakeRetriever([PASSWORD_SOURCE])
+    llm = ScriptedLlm(llm_json("answer", sources=["password-reset"]))
+    with build_client(retriever, llm) as client:
+        client.post("/tickets", json={"subject": "VPN down", "body": body})
+        response = client.get("/tickets")
+
+    assert response.status_code == 200
+    excerpt = response.json()[0]["body_excerpt"]
+    assert len(body) > EXCERPT_LIMIT
+    assert excerpt.endswith("…")
+    assert len(excerpt) <= EXCERPT_LIMIT + 1
+    assert excerpt.split()[0] == body.split()[0]
+    stem = excerpt.removesuffix("…")
+    assert body.startswith(stem)
+    # The cut lands on a word boundary, so the last kept word stays intact.
+    assert body[len(stem)].isspace()
+
+
+def test_list_tickets_excerpt_keeps_the_last_word_when_the_cut_lands_on_a_space(
+    db_path: str, repository: Repository
+) -> None:
+    # The character at the limit is already a space, so no word is split and
+    # the naive rfind(" ") backtrack would drop "final" for nothing.
+    body = "word " * 27 + "final extra"
+    assert body[EXCERPT_LIMIT] == " "
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        ticket = repository.create_ticket("Cut on a space", body)
+        repository.save_decision(
+            ticket_id=ticket.id,
+            action="ask",
+            reasoning="The cut lands on a space.",
+            drafted_response="Could you add more detail?",
+            sources_used=[],
+        )
+        response = client.get("/tickets")
+
+    assert response.status_code == 200
+    excerpt = response.json()[0]["body_excerpt"]
+    assert excerpt == "word " * 27 + "final" + "…"
+
+
+def test_list_tickets_excerpt_breaks_on_a_newline_boundary(
+    db_path: str, repository: Repository
+) -> None:
+    body = "alpha\n" * 30
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        ticket = repository.create_ticket("Newline separated", body)
+        repository.save_decision(
+            ticket_id=ticket.id,
+            action="ask",
+            reasoning="The body has no spaces, only newlines.",
+            drafted_response="Could you add more detail?",
+            sources_used=[],
+        )
+        response = client.get("/tickets")
+
+    assert response.status_code == 200
+    excerpt = response.json()[0]["body_excerpt"]
+    assert excerpt == "alpha\n" * 22 + "alpha" + "…"
+
+
+def test_list_tickets_excerpt_hard_cuts_a_long_unbroken_word(
+    db_path: str, repository: Repository
+) -> None:
+    body = "x" * 200
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        ticket = repository.create_ticket("No spaces", body)
+        repository.save_decision(
+            ticket_id=ticket.id,
+            action="ask",
+            reasoning="The body is one long token.",
+            drafted_response="Could you rephrase the issue?",
+            sources_used=[],
+        )
+        response = client.get("/tickets")
+
+    assert response.status_code == 200
+    excerpt = response.json()[0]["body_excerpt"]
+    assert excerpt == "x" * EXCERPT_LIMIT + "…"
+    assert len(excerpt) == EXCERPT_LIMIT + 1
+
+
+def test_list_tickets_excerpt_keeps_a_body_of_exactly_the_limit_verbatim(
+    db_path: str, repository: Repository
+) -> None:
+    body = "word " * 27 + "final"
+    assert len(body) == EXCERPT_LIMIT
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        ticket = repository.create_ticket("Exactly at the limit", body)
+        repository.save_decision(
+            ticket_id=ticket.id,
+            action="ask",
+            reasoning="The body is exactly at the limit.",
+            drafted_response="Could you add more detail?",
+            sources_used=[],
+        )
+        response = client.get("/tickets")
+
+    assert response.status_code == 200
+    excerpt = response.json()[0]["body_excerpt"]
+    assert excerpt == body
+    assert "…" not in excerpt
+
+
+def test_list_tickets_keeps_a_short_body_excerpt_verbatim(db_path: str) -> None:
+    retriever = FakeRetriever([PASSWORD_SOURCE])
+    llm = ScriptedLlm(llm_json("answer", sources=["password-reset"]))
+    with build_client(retriever, llm) as client:
+        client.post(
+            "/tickets",
+            json={"subject": "VPN down", "body": "  The VPN client fails.  "},
+        )
+        response = client.get("/tickets")
+
+    assert response.status_code == 200
+    excerpt = response.json()[0]["body_excerpt"]
+    assert excerpt == "The VPN client fails."
+    assert "…" not in excerpt
+
+
+def test_list_tickets_returns_an_empty_body_excerpt_for_an_empty_body(
+    db_path: str, repository: Repository
+) -> None:
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        ticket = repository.create_ticket("Undecided", "")
+        repository.save_decision(
+            ticket_id=ticket.id,
+            action="ask",
+            reasoning="The body is empty.",
+            drafted_response="Could you describe the issue?",
+            sources_used=[],
+        )
+        response = client.get("/tickets")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload[0]["ticket_id"] == ticket.id
+    assert payload[0]["body_excerpt"] == ""
+
+
 def test_get_ticket_returns_the_body_and_its_latest_decision(db_path: str) -> None:
     retriever = FakeRetriever([PASSWORD_SOURCE])
     llm = ScriptedLlm(
@@ -668,6 +849,101 @@ def test_get_ticket_with_an_unknown_id_returns_404(db_path: str) -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Resource not found"}
+
+
+def test_allowed_origin_gets_the_cors_header(db_path: str) -> None:
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        response = client.get("/tickets", headers={"Origin": "http://localhost:4321"})
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:4321"
+
+
+def test_disallowed_origin_does_not_get_the_cors_header(db_path: str) -> None:
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        response = client.get("/tickets", headers={"Origin": "http://evil.example"})
+
+    assert response.status_code == 200
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_preflight_for_the_allowed_origin_permits_get(db_path: str) -> None:
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        response = client.options(
+            "/tickets",
+            headers={
+                "Origin": "http://localhost:4321",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:4321"
+    assert "GET" in response.headers["access-control-allow-methods"]
+
+
+def test_preflight_does_not_advertise_write_methods(db_path: str) -> None:
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        response = client.options(
+            "/tickets",
+            headers={
+                "Origin": "http://localhost:4321",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+
+    allowed = response.headers["access-control-allow-methods"]
+    assert "*" not in allowed
+    assert "POST" not in allowed
+    assert response.headers.get("access-control-allow-credentials") is None
+
+
+def test_cors_is_the_outermost_middleware() -> None:
+    # Starlette wraps the LAST added middleware outermost, so CORS must be able
+    # to answer a preflight before the body-size guard consumes the request.
+    assert app.user_middleware[0].cls is CORSMiddleware
+
+
+def test_preflight_is_answered_before_the_request_size_guard(db_path: str) -> None:
+    with build_client(FakeRetriever([]), ScriptedLlm(llm_json("ask"))) as client:
+        response = client.options(
+            "/tickets",
+            headers={
+                "Origin": "http://localhost:4321",
+                "Access-Control-Request-Method": "GET",
+                "Content-Length": str(MAX_REQUEST_BYTES + 1),
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:4321"
+
+
+def test_frontend_origins_defaults_to_the_local_astro_origins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("FRONTEND_ORIGINS", raising=False)
+
+    assert _frontend_origins() == list(DEFAULT_FRONTEND_ORIGINS)
+    assert "*" not in DEFAULT_FRONTEND_ORIGINS
+
+
+def test_frontend_origins_reads_the_env_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "FRONTEND_ORIGINS", " https://tickets.example , ,https://ops.example "
+    )
+
+    assert _frontend_origins() == ["https://tickets.example", "https://ops.example"]
+
+
+def test_frontend_origins_falls_back_when_the_override_is_blank(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FRONTEND_ORIGINS", "  , ")
+
+    assert _frontend_origins() == list(DEFAULT_FRONTEND_ORIGINS)
 
 
 def test_get_repository_yields_a_fresh_connection_and_closes_it(

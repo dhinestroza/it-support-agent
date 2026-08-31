@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Distinct from retrieval.EXCERPT_MAX_CHARS: this one caps the list-view excerpt.
+_SUMMARY_EXCERPT_CHARS = 140
+
 RepositoryDep = Annotated[Repository, Depends(get_repository)]
 RetrieverDep = Annotated[Retriever, Depends(get_retriever)]
 DecisionEngineDep = Annotated[DecisionEngine, Depends(get_decision_engine)]
@@ -46,10 +49,25 @@ def _stored_sources_out(decision: DecisionRecord) -> list[SourceOut]:
     ]
 
 
+def _body_excerpt(body: str, limit: int = _SUMMARY_EXCERPT_CHARS) -> str:
+    text = body.strip()
+    if len(text) <= limit:
+        return text
+    window = text[:limit]
+    # A whitespace character at the limit means no word was split, so there is
+    # nothing to back off to. Otherwise cut at the last word boundary.
+    if not text[limit].isspace():
+        cut = max(window.rfind(" "), window.rfind("\n"))
+        if cut > 0:
+            window = window[:cut]
+    return window.rstrip() + "…"
+
+
 def _to_summary(ticket: Ticket, decision: DecisionRecord | None) -> TicketSummary:
     return TicketSummary(
         ticket_id=ticket.id,
         subject=ticket.subject,
+        body_excerpt=_body_excerpt(ticket.body),
         status=ticket.status,
         created_at=ticket.created_at,
         action=None if decision is None else decision.action,

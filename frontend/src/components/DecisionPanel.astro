@@ -1,6 +1,6 @@
 ---
 import type { TicketAction } from "../lib/types";
-import { ACTION_LABELS, FIELD_LABELS, MESSAGES } from "../lib/labels";
+import { AGENT_NAME, AGENT_ROLE, FIELD_LABELS, MESSAGES } from "../lib/labels";
 
 interface Props {
   action: TicketAction | null;
@@ -12,6 +12,9 @@ const { action, reasoning, draft } = Astro.props;
 
 const hasReasoning = reasoning !== null && reasoning.trim() !== "";
 const hasDraft = draft !== null && draft.trim() !== "";
+
+const words = AGENT_NAME.trim().split(/\s+/);
+const initials = `${words[0]?.[0] ?? ""}${words.length > 1 ? (words.at(-1)?.[0] ?? "") : ""}`.toUpperCase();
 ---
 
 {
@@ -20,102 +23,105 @@ const hasDraft = draft !== null && draft.trim() !== "";
       <span lang="es">{MESSAGES.noDecision}</span>
     </p>
   ) : (
-    <section class="panel">
-      <header class="head">
-        <span lang="es" class="label">
-          {FIELD_LABELS.proposedAction}
-        </span>
-        <strong lang="es" class="action">
-          {ACTION_LABELS[action]}
-        </strong>
-      </header>
-      {hasReasoning && (
-        <div class="block">
-          <h3 lang="es" class="field-label">
-            {FIELD_LABELS.reasoning}
-          </h3>
-          <p class="reasoning">{reasoning}</p>
+    <div class="message">
+      <div class="avatar" aria-hidden="true">
+        {initials}
+      </div>
+      <div class="body">
+        <div class="who">
+          <span class="name" lang="es">
+            {AGENT_NAME}
+          </span>
+          <span class="role" lang="es">
+            {AGENT_ROLE}
+          </span>
         </div>
-      )}
-      {hasDraft && (
-        <div class="block">
-          <h3 lang="es" class="field-label">
-            {FIELD_LABELS.draft}
-          </h3>
-          <div class="draft">{draft}</div>
-        </div>
-      )}
-    </section>
+        {hasDraft && <div class="draft">{draft}</div>}
+        {hasReasoning && (
+          <p class="reasoning">
+            <span class="reasoning-k" lang="es">
+              {FIELD_LABELS.reasoning}:
+            </span>{" "}
+            {reasoning}
+          </p>
+        )}
+      </div>
+    </div>
   )
 }
 
 <style>
-  .panel,
-  .empty {
-    padding: 1rem 1.15rem;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
+  .message {
+    display: flex;
+    gap: 0.75rem;
   }
 
-  .panel {
+  .avatar {
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: var(--color-brand);
+    color: var(--color-surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+
+  .body {
     display: flex;
     flex-direction: column;
-    gap: 0.9rem;
+    gap: 0.5rem;
+    min-width: 0;
   }
 
-  .head {
+  .who {
     display: flex;
-    align-items: baseline;
-    gap: 0.45rem;
+    flex-direction: column;
+    gap: 0.1rem;
+    line-height: 1.3;
   }
 
-  .label,
-  .field-label {
-    margin: 0;
-    font-size: 0.7rem;
+  .name {
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    color: var(--color-text);
+    font-size: 0.9rem;
+  }
+
+  .role {
+    font-size: 0.75rem;
     color: var(--color-text-muted);
   }
 
-  .label::after {
-    content: ":";
-  }
-
-  .action {
-    color: var(--color-brand);
-    font-size: 0.95rem;
-    text-transform: capitalize;
-  }
-
-  .block {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
+  .draft {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--color-text);
+    font-size: 0.9rem;
+    line-height: 1.6;
   }
 
   .reasoning {
     margin: 0;
-    color: var(--color-text);
-    font-size: 0.88rem;
-    line-height: 1.55;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+    overflow-wrap: anywhere;
   }
 
-  .draft {
-    padding: 0.6rem 0.85rem;
-    border-left: 2px solid var(--color-brand);
-    background: var(--color-bg);
-    color: var(--color-text);
-    font-size: 0.88rem;
-    line-height: 1.55;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
+  .reasoning-k {
+    font-weight: 600;
   }
 
   .empty {
     margin: 0;
+    padding: 1rem 1.15rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
     color: var(--color-text-muted);
     font-size: 0.88rem;
     line-height: 1.55;

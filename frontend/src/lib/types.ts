@@ -22,6 +22,7 @@ export interface TicketDetail {
 export interface TicketSummary {
   ticket_id: string;
   subject: string;
+  body_excerpt: string;
   status: TicketStatus;
   created_at: string;
   action: TicketAction | null;

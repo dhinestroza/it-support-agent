@@ -37,14 +37,19 @@ lives in a single map (`frontend/src/lib/labels.ts`); components never
 hardcode a Spanish string inline.
 
 ### Acceptance criteria
-- [ ] Dashboard lists every ticket in the demo dataset with its status
+- [x] Dashboard lists every ticket in the demo dataset with its status
       badge (resolved / pending / escalated) using the brand palette from
       tech-stack.md
-- [ ] Clicking a ticket opens its detail view
-- [ ] Detail view shows the ticket text, the retrieved KB sources, the
+- [x] Clicking a ticket opens its detail view
+- [x] Detail view shows the ticket text, the retrieved KB sources, the
       agent's decision, and the drafted response/escalation note
-- [ ] All colors come from `astro-frontend-tokens` — no hardcoded hex, no
+- [x] All colors come from `astro-frontend-tokens` — no hardcoded hex, no
       default blue/purple UI library look
+
+Validated manually end-to-end against the live backend on 2026-08-30: real
+ticket seeded via `POST /tickets`, dashboard + detail pages built and
+reviewed; every task's gate confirmed `npx astro check` clean and zero
+hardcoded hex outside `tokens.css`.
 
 ### Edge cases and failure modes
 - No tickets yet → empty state, not a blank page
@@ -65,3 +70,5 @@ The backend endpoints added in T0 are covered by pytest
 (`tests/test_api.py`). The Astro pages are verified by `npm run build` +
 `npx astro check` per task plus the manual acceptance-criteria check
 above.
+The T10–T11b redesign is a visual re-skin only — the four acceptance
+criteria above are unchanged and re-checked after it.

@@ -52,6 +52,13 @@ The backend loads the repo-root `.env` at startup (`src/api/main.py`), so the
 demo flow is `uvicorn src.api.main:app` → `POST /tickets` (seeds data) →
 `npm run build` in `frontend/`.
 
+Post-release: the **detail page** was moved from build-time `getStaticPaths`
+to a **client-side fetch** (`/ticket?id=<id>`, plain `<script>`), because a
+ticket created after the last build 404'd on its static detail URL. The
+**dashboard stays build-time-static**. This required `CORSMiddleware` on the
+backend. `output: "static"` is unchanged — the detail page is still a static
+shell, it just fetches its data in the browser.
+
 ### Alternatives considered
 - **React/Vue islands** — discarded: no interactivity needed for a
   read-only 2-page demo, plain Astro is faster to build and matches the
@@ -59,3 +66,33 @@ demo flow is `uvicorn src.api.main:app` → `POST /tickets` (seeds data) →
 - **Server-rendering tickets inline in FastAPI (Jinja templates)** —
   discarded: user explicitly asked for Astro; also keeps frontend/backend
   concerns separated for a cleaner demo
+
+### Visual redesign (T10–T11b)
+The redesign takes the *layout and finish* of two user-supplied mockups (a
+sidebar dashboard with month-grouped ticket cards; a two-column ticket
+detail with a right-hand metadata summary card) and re-skins them in the
+project's existing brand palette — light theme only, `output: "static"`
+unchanged, no client-side data layer.
+
+**IN:**
+- left sidebar with a single active "Dashboard" item
+- month-grouped dashboard cards: short id + date + subject + `body_excerpt`
+  + status badge + action badge
+- two-column ticket detail
+- right-hand metadata summary card (generated-on date, status, proposed action)
+- breadcrumb + styled back button
+- restyled `SourceCitation` / `DecisionPanel`
+
+**OUT** (mockup features unsupported by the read-only demo + current data model):
+- requester name
+- priority level
+- comment counts
+- All / Open / Closed tabs
+- search
+- pagination
+- "Create Ticket" / "Add New Ticket" forms
+- attached documents / downloads
+- reply thread input
+- "Mark as Resolved" action
+- disabled sidebar stubs
+- dark theme

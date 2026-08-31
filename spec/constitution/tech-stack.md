@@ -15,6 +15,10 @@ _How the project is built and the rules all code must follow. The technical refe
 | Config | `python-dotenv` (runtime dependency) loads the local `.env` at startup — no secrets committed, `.env` is gitignored |
 | Infra | None — local/free only, no cloud, no Terraform, no CI/CD (out of scope for the 90-minute build) |
 
+Astro static output — the dashboard is prerendered at build time; the ticket
+detail page is a static shell that fetches its data client-side (browser →
+API, CORS-enabled).
+
 ## Brand / design tokens
 
 | Token | Value |

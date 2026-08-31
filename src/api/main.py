@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -8,6 +9,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -21,12 +23,6 @@ _ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
 
 def _load_local_env(env_file: Path | None = None) -> None:
-    """Load the repo-root `.env` so `uvicorn src.api.main:app` picks up
-    ANTHROPIC_API_KEY without a manual export (dev/demo convenience, mirrors
-    tests/conftest.py; `.env` is gitignored, so no secrets are committed).
-    Never overrides already-exported variables, and is a no-op if the file
-    is missing.
-    """
     load_dotenv(env_file or _ENV_FILE)
 
 
@@ -35,6 +31,16 @@ _load_local_env()
 logger = logging.getLogger(__name__)
 
 MAX_REQUEST_BYTES = 64 * 1024
+
+DEFAULT_FRONTEND_ORIGINS = ("http://localhost:4321", "http://127.0.0.1:4321")
+
+
+def _frontend_origins() -> list[str]:
+    configured = [
+        origin.strip() for origin in os.getenv("FRONTEND_ORIGINS", "").split(",")
+    ]
+    return [origin for origin in configured if origin] or list(DEFAULT_FRONTEND_ORIGINS)
+
 
 _ERROR_RESPONSES: dict[type[SupportAgentError], tuple[int, str]] = {
     NotFoundError: (404, "Resource not found"),
@@ -121,6 +127,17 @@ app = FastAPI(
 )
 app.include_router(router)
 app.add_middleware(RequestSizeLimitMiddleware)
+# Added last so it is the outermost layer and can answer a preflight before the
+# size guard: CORS is scoped to the local Astro dev/preview origin, this app has
+# no auth so credentials stay off, and FRONTEND_ORIGINS lets a deploy override it.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_frontend_origins(),
+    allow_methods=["GET", "OPTIONS"],
+    allow_headers=["*"],
+    allow_credentials=False,
+    max_age=600,
+)
 
 
 @app.exception_handler(SupportAgentError)

@@ -3,8 +3,50 @@ import Layout from "../layouts/Layout.astro";
 import TicketCard from "../components/TicketCard.astro";
 import { fetchTickets } from "../lib/api";
 import { MESSAGES, PAGE } from "../lib/labels";
+import type { TicketSummary } from "../lib/types";
+
+interface MonthGroup {
+  key: string;
+  label: string;
+  tickets: TicketSummary[];
+}
+
+function monthKey(raw: string): string {
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) {
+    return "invalid";
+  }
+  return `${date.getFullYear()}-${date.getMonth()}`;
+}
+
+function monthLabel(raw: string): string {
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  const label = date.toLocaleDateString("es-ES", {
+    month: "long",
+    year: "numeric",
+  });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function groupByMonth(tickets: TicketSummary[]): MonthGroup[] {
+  const groups = new Map<string, MonthGroup>();
+  for (const ticket of tickets) {
+    const key = monthKey(ticket.created_at);
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, label: monthLabel(ticket.created_at), tickets: [] };
+      groups.set(key, group);
+    }
+    group.tickets.push(ticket);
+  }
+  return [...groups.values()];
+}
 
 const result = await fetchTickets();
+const groups = result.ok ? groupByMonth(result.data) : [];
 ---
 
 <Layout title={PAGE.dashboardTitle}>
@@ -19,31 +61,49 @@ const result = await fetchTickets();
         {MESSAGES.noTickets}
       </p>
     ) : (
-      <ul class="ticket-list">
-        {result.data.map((ticket) => (
-          <li>
-            <TicketCard ticket={ticket} />
-          </li>
-        ))}
-      </ul>
+      groups.map((group) => (
+        <section class="month">
+          {group.label && (
+            <h2 class="month-label" lang="es">
+              {group.label}
+            </h2>
+          )}
+          <div class="month-card">
+            {group.tickets.map((ticket) => (
+              <TicketCard ticket={ticket} />
+            ))}
+          </div>
+        </section>
+      ))
     )
   }
 </Layout>
 
 <style>
   h1 {
-    margin: 0 0 1.25rem;
+    margin: 0 0 1.5rem;
     font-size: 1.5rem;
     color: var(--color-text);
   }
 
-  .ticket-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+  .month + .month {
+    margin-top: 1.75rem;
+  }
+
+  .month-label {
+    margin: 0 0 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+  }
+
+  .month-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    overflow: hidden;
   }
 
   .state {

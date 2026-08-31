@@ -41,6 +41,7 @@ class TicketResponse(BaseModel):
 class TicketSummary(BaseModel):
     ticket_id: str
     subject: str
+    body_excerpt: str
     status: TicketStatus
     created_at: str
     action: Action | None = None

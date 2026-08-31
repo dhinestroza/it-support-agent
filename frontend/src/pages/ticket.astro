@@ -1,0 +1,594 @@
+---
+import Layout from "../layouts/Layout.astro";
+import { MESSAGES, PAGE } from "../lib/labels";
+
+// Client-side detail page: the route is static (`/ticket`) so the ticket id
+// travels in the query string (`/ticket?id=...`). This lets a ticket created
+// after the last build open without rebuilding the site.
+---
+
+<Layout title={PAGE.detailTitle}>
+  <div class="tdetail" data-tdetail>
+    <p class="tdetail-status" lang="es">{MESSAGES.loading}</p>
+  </div>
+</Layout>
+
+<script>
+  import { fetchTicketDetail } from "../lib/api";
+  import { formatTicketDate } from "../lib/date";
+  import {
+    ACTION_LABELS,
+    AGENT_NAME,
+    AGENT_ROLE,
+    FIELD_LABELS,
+    MESSAGES,
+    PAGE,
+    STATUS_LABELS,
+  } from "../lib/labels";
+  import type { Source, TicketDetail } from "../lib/types";
+
+  /**
+   * Every ticket field is untrusted input, so the DOM is built node by node
+   * with `textContent` — never `innerHTML` with interpolated ticket data.
+   */
+  function el(tag: string, className?: string, text?: string): HTMLElement {
+    const node = document.createElement(tag);
+    if (className) {
+      node.className = className;
+    }
+    if (text !== undefined) {
+      node.textContent = text;
+    }
+    return node;
+  }
+
+  function spanish(node: HTMLElement): HTMLElement {
+    node.lang = "es";
+    return node;
+  }
+
+  function link(href: string, text: string, className?: string): HTMLElement {
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.textContent = text;
+    if (className) {
+      anchor.className = className;
+    }
+    return anchor;
+  }
+
+  function buildTopbar(shortId: string): HTMLElement {
+    const bar = el("div", "topbar");
+    bar.append(spanish(link("/", PAGE.backToList, "back")));
+
+    const crumbs = spanish(el("nav", "crumbs"));
+    crumbs.setAttribute("aria-label", PAGE.breadcrumbLabel);
+    crumbs.append(link("/", PAGE.navHome));
+    if (shortId) {
+      const separator = el("span", "sep", PAGE.breadcrumbSeparator);
+      separator.setAttribute("aria-hidden", "true");
+      const current = el("span", "current", `#${shortId}`);
+      current.setAttribute("aria-current", "page");
+      crumbs.append(separator, current);
+    }
+    bar.append(crumbs);
+    return bar;
+  }
+
+  function section(heading: string, content: HTMLElement): HTMLElement {
+    const wrapper = el("section", "section");
+    wrapper.append(spanish(el("h2", undefined, heading)), content);
+    return wrapper;
+  }
+
+  function buildBody(body: string): HTMLElement {
+    const card = el("div", "body-card");
+    card.append(el("div", "body-text", body));
+    return card;
+  }
+
+  function buildCitation(source: Source): HTMLElement {
+    const figure = el("figure", "citation");
+    const caption = el("figcaption", "cap");
+    caption.append(el("code", "doc-id", source.doc_id));
+    figure.append(caption, el("blockquote", "excerpt", source.excerpt));
+    return figure;
+  }
+
+  function buildSources(sources: Source[]): HTMLElement {
+    if (sources.length === 0) {
+      return spanish(el("p", "state", MESSAGES.noSources));
+    }
+    const list = el("ul", "sources");
+    for (const source of sources) {
+      const item = el("li");
+      item.append(buildCitation(source));
+      list.append(item);
+    }
+    return list;
+  }
+
+  function agentInitials(): string {
+    const words = AGENT_NAME.trim().split(/\s+/);
+    const first = words[0]?.[0] ?? "";
+    const last = words.length > 1 ? (words.at(-1)?.[0] ?? "") : "";
+    return `${first}${last}`.toUpperCase();
+  }
+
+  function buildDecision(ticket: TicketDetail): HTMLElement {
+    if (ticket.action === null) {
+      const empty = el("p", "empty");
+      empty.append(spanish(el("span", undefined, MESSAGES.noDecision)));
+      return empty;
+    }
+
+    const message = el("div", "message");
+    const avatar = el("div", "avatar", agentInitials());
+    avatar.setAttribute("aria-hidden", "true");
+
+    const body = el("div", "msg-body");
+    const who = el("div", "who");
+    who.append(
+      spanish(el("span", "name", AGENT_NAME)),
+      spanish(el("span", "role", AGENT_ROLE)),
+    );
+    body.append(who);
+
+    if (ticket.draft !== null && ticket.draft.trim() !== "") {
+      body.append(el("div", "draft", ticket.draft));
+    }
+
+    if (ticket.reasoning !== null && ticket.reasoning.trim() !== "") {
+      const reasoning = el("p", "reasoning");
+      reasoning.append(
+        spanish(el("span", "reasoning-k", `${FIELD_LABELS.reasoning}:`)),
+        document.createTextNode(` ${ticket.reasoning}`),
+      );
+      body.append(reasoning);
+    }
+
+    message.append(avatar, body);
+    return message;
+  }
+
+  function buildRow(key: string, value: HTMLElement): HTMLElement {
+    const row = el("div", "row");
+    row.append(spanish(el("span", "k", key)), value);
+    return row;
+  }
+
+  function buildDateValue(rawDate: string): HTMLElement {
+    const created = formatTicketDate(rawDate);
+    if (created.iso === null) {
+      return el("span", "v date", created.label);
+    }
+    const time = el("time", "v date", created.label);
+    time.setAttribute("datetime", created.iso);
+    return time;
+  }
+
+  function buildStatusValue(status: TicketDetail["status"]): HTMLElement {
+    const value = el("span", "v");
+    value.append(
+      spanish(el("span", `badge badge--${status}`, STATUS_LABELS[status])),
+    );
+    return value;
+  }
+
+  function buildActionValue(action: TicketDetail["action"]): HTMLElement {
+    const value = el("span", "v");
+    value.append(
+      action === null
+        ? spanish(el("span", "dash", FIELD_LABELS.notProvided))
+        : spanish(el("span", "action-pill", ACTION_LABELS[action])),
+    );
+    return value;
+  }
+
+  function buildSummary(ticket: TicketDetail): HTMLElement {
+    const aside = el("aside", "col-side");
+    aside.setAttribute("aria-label", PAGE.summaryLabel);
+    const card = el("div", "summary-card");
+    card.append(
+      buildRow(FIELD_LABELS.generatedOn, buildDateValue(ticket.created_at)),
+      buildRow(FIELD_LABELS.status, buildStatusValue(ticket.status)),
+      buildRow(
+        FIELD_LABELS.proposedActionLong,
+        buildActionValue(ticket.action),
+      ),
+    );
+    aside.append(card);
+    return aside;
+  }
+
+  function buildDetail(ticket: TicketDetail): HTMLElement {
+    const article = el("article", "detail");
+    article.append(el("h1", undefined, ticket.subject));
+
+    const main = el("div", "col-main");
+    main.append(
+      section(FIELD_LABELS.body, buildBody(ticket.body)),
+      section(FIELD_LABELS.sources, buildSources(ticket.sources)),
+      section(FIELD_LABELS.agentDraft, buildDecision(ticket)),
+    );
+
+    const grid = el("div", "detail-grid");
+    grid.append(main, buildSummary(ticket));
+    article.append(grid);
+    return article;
+  }
+
+  async function main(): Promise<void> {
+    const root = document.querySelector<HTMLElement>("[data-tdetail]");
+    if (root === null) {
+      return;
+    }
+
+    const id = new URLSearchParams(window.location.search).get("id");
+    const content = el("div", "tdetail-content");
+    root.replaceChildren(buildTopbar((id ?? "").slice(0, 8)), content);
+
+    const showState = (message: string): void => {
+      content.replaceChildren(spanish(el("p", "tdetail-status", message)));
+    };
+
+    if (id === null || id === "") {
+      showState(MESSAGES.ticketNotFound);
+      return;
+    }
+
+    showState(MESSAGES.loading);
+    const result = await fetchTicketDetail(id);
+    if (!result.ok) {
+      showState(
+        result.reason === "not-found"
+          ? MESSAGES.ticketNotFound
+          : MESSAGES.apiError,
+      );
+      return;
+    }
+
+    content.replaceChildren(buildDetail(result.data));
+  }
+
+  void main();
+</script>
+
+<style is:global>
+  /* The detail DOM is built by the client script, so it never receives Astro's
+     scoped-style hash. Every selector is namespaced under `.tdetail` instead. */
+  .tdetail .topbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .tdetail .back {
+    display: inline-block;
+    padding: 0.3rem 0.85rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-surface);
+    color: var(--color-brand);
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .tdetail .back:hover {
+    background: color-mix(in srgb, var(--color-brand) 8%, transparent);
+    border-color: color-mix(in srgb, var(--color-brand) 35%, transparent);
+  }
+
+  .tdetail .back:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+
+  .tdetail .crumbs {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--color-text-muted);
+  }
+
+  .tdetail .crumbs a {
+    color: var(--color-text-muted);
+    text-decoration: none;
+  }
+
+  .tdetail .crumbs a:hover {
+    color: var(--color-brand);
+    text-decoration: underline;
+  }
+
+  .tdetail .crumbs a:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+
+  .tdetail .crumbs .current {
+    color: var(--color-text);
+    font-family: ui-monospace, monospace;
+  }
+
+  .tdetail h1 {
+    margin: 0 0 1.25rem;
+    font-size: 1.6rem;
+    line-height: 1.3;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+  }
+
+  .tdetail .tdetail-status {
+    margin: 0;
+    padding: 1rem 0;
+    font-size: 1.05rem;
+    color: var(--color-text-muted);
+  }
+
+  .tdetail .detail-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .tdetail .col-main {
+    min-width: 0;
+  }
+
+  .tdetail .section + .section {
+    margin-top: 1.75rem;
+  }
+
+  .tdetail .col-main h2 {
+    margin: 0 0 0.9rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--color-text);
+  }
+
+  .tdetail .body-card {
+    padding: 0.9rem 1.1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+  }
+
+  .tdetail .body-text {
+    color: var(--color-text);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .tdetail .sources {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .tdetail .citation {
+    margin: 0;
+    padding: 0.75rem 0.9rem;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-brand) 5%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .tdetail .cap {
+    margin: 0;
+  }
+
+  .tdetail .doc-id {
+    font-family: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+  }
+
+  .tdetail .excerpt {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+
+  .tdetail .state {
+    margin: 0;
+    padding: 0.75rem 0;
+    color: var(--color-text-muted);
+    font-size: 0.88rem;
+  }
+
+  .tdetail .message {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .tdetail .avatar {
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: var(--color-brand);
+    color: var(--color-surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+
+  .tdetail .msg-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-width: 0;
+  }
+
+  .tdetail .who {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    line-height: 1.3;
+  }
+
+  .tdetail .name {
+    font-weight: 600;
+    color: var(--color-text);
+    font-size: 0.9rem;
+  }
+
+  .tdetail .role {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .tdetail .draft {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--color-text);
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+
+  .tdetail .reasoning {
+    margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+    overflow-wrap: anywhere;
+  }
+
+  .tdetail .reasoning-k {
+    font-weight: 600;
+  }
+
+  .tdetail .empty {
+    margin: 0;
+    padding: 1rem 1.15rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    color: var(--color-text-muted);
+    font-size: 0.88rem;
+    line-height: 1.55;
+  }
+
+  .tdetail .col-side {
+    min-width: 0;
+  }
+
+  .tdetail .summary-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1rem 1.1rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+  }
+
+  .tdetail .row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .tdetail .row + .row {
+    padding-top: 0.85rem;
+    border-top: 1px solid color-mix(in srgb, var(--color-brand) 10%, transparent);
+  }
+
+  .tdetail .k {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+  }
+
+  .tdetail .v {
+    font-size: 0.85rem;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+  }
+
+  .tdetail .date {
+    color: var(--color-text);
+  }
+
+  .tdetail .badge {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.5;
+  }
+
+  .tdetail .badge--pending {
+    background-color: var(--status-pending-bg);
+    color: var(--status-pending-text);
+  }
+
+  .tdetail .badge--resolved {
+    background-color: var(--status-resolved-bg);
+    color: var(--status-resolved-text);
+  }
+
+  .tdetail .badge--escalated {
+    background-color: var(--status-escalated-bg);
+    color: var(--status-escalated-text);
+  }
+
+  .tdetail .action-pill {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-brand) 12%, transparent);
+    color: var(--color-brand);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.5;
+    text-transform: capitalize;
+  }
+
+  .tdetail .dash {
+    color: var(--color-text-muted);
+  }
+
+  @media (max-width: 800px) {
+    .tdetail .detail-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .tdetail .col-side {
+      order: -1;
+    }
+  }
+</style>
